@@ -16,7 +16,7 @@
 # * 23 * * * /every/minute/from/eleven -to midnight
 # 23 23 * * * /daily/job -ff
 # 05,23,42 * * * * /almost/20-min-wise
-# */15 * * * * /launch --every-15-seconds
+# */15 * * * * /launch --every-15-minutes
 #
 
 
