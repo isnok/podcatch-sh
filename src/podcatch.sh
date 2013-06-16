@@ -56,15 +56,19 @@ downloadepisodes=true
 initignoring=false
 
 usage () {
+    self=$(basename $0)
     cat <<EOF
-$(basename $0) - a shell scripted podcatcher for openwrt devices
+$self - a shell scripted podcatcher for openwrt devices
 
-usage: $(basename $0) [args]
+usage: $self [args/castlists]
 
-The args are processed in the order they are given.
-All args not in the list below except 'all' will be treated as castlists.
-The 'all' arg instructs to fetch all castlists. This is the default if no args are given.
-To change behaviour of $(basename $0) use:
+The arguments are processed in the order they are given.
+All arguments not listed below are treated as castlists.
+The castlists directory is configured in $self itself.
+'all' a is a special castlist, instructing to fetch all castlists.
+'all' is the default behaviour if no args are given.
+
+To change behaviour of $self use:
 
     -ne|--no-episodes   don't download episodes
     -nf|--no-feeds      don't download feeds (reuse last fetched version)
@@ -73,6 +77,16 @@ To change behaviour of $(basename $0) use:
     -if|--init-fetched  if a new feed is found, initialize it's episodes as fetched
     -iw|--init-wanted   if a new feed is found, download all of it's episodes (default)
     -h|--help           print this help
+
+Note that if you use one of these, you should also specify a castlist.
+
+Argument combos that drove development:
+
+    $self -ne all  # fetch-and-parse-only on all feeds (almost-dry-run, inits new casts)
+    $self -np all  # continue all without re-fetching and re-parsing
+    $self -nf -ne jtv  # re-parse the previously fetched feeds from \$LISTDIR/jtv.lst
+    $self -if cczwei -ne chaos -h -da casts # you get the idea...
+
 EOF
 }
 
