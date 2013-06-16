@@ -1,0 +1,5 @@
+DLDIR=/tmp/incoming/oefrech
+http://web.ard.de/radiotatort/rss/podcast.xml ---media--> radiotatort
+http://podcast.wdr.de/quarks.xml ---media--> quarks
+http://www.zdf.de/ZDFmediathek/podcast/222630?view=podcast ---media--> anstalt
+http://www.ndr.de/fernsehen/sendungen/extra_3/videos/zum_mitnehmen/extradrei196.xml ---media--> extra3

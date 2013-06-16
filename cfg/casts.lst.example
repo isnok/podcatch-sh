@@ -1,0 +1,40 @@
+# casts.lst - a config file for podcatch.sh
+#
+# you can just start listing our feeds.
+#
+# to do so, compose lines like:
+# feed ---catcher--> directory
+#
+# * feed can be anything wget-able on your desired platform
+#
+# * catcher selects the parser for the feed (from the plugin dir)
+#
+# okay, so here's a feed:
+http://web.ard.de/radiotatort/rss/podcast.xml ---media--> /tmp/incoming/radiotatort
+
+# but normally it's more comfortable to choose an incoming directory
+#
+# * if directory starts with a /,
+#       it is interpreted as an absolute path,
+#   otherwise
+#       it is concatenated with the current DLDIR.
+#
+# you set the DLDIR like this:
+DLDIR=/tmp/incoming
+
+# and then download relative to the DLDIR:
+http://podcast.wdr.de/quarks.xml ---quarks--> quarks
+
+# download to absolute paths still work:
+http://www.hoaxilla.de/podcast/hoaxilla.xml ---hoax--> /tmp/incoming/hoaxilla
+
+# and, since this file is processed linewise,
+# you can even change the DLDIR in between ...
+DLDIR=/tmp
+
+# ... and following feeds will download relative to the new DLDIR
+http://dublab.com/feed/podcast ---audio--> incoming/dublab
+
+# final note:
+#   it might be wise to avoid encoding-related trouble whereever filenames occur
+
