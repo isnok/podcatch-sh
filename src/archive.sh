@@ -14,6 +14,7 @@ archive () {
     echo "$(date) [archive] finished"
 }
 
+mkdir -p $ARCHIVE
 archive &> $LOGFILE.new
 cat $LOGFILE.new >> $LOGFILE
 rm $LOGFILE.tmp $LOGFILE.new
