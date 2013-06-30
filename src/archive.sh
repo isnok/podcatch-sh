@@ -3,9 +3,9 @@
 # archive.sh - a convenience feature for podcatching via shell
 #
 
-INCOMING=/mnt/slugspace/incoming
-ARCHIVE=/mnt/slugspace/archive
-LOGFILE=/mnt/slugspace/podcatch/archive.log
+INCOMING=/mnt/brueckencache/incoming
+ARCHIVE=/mnt/brueckencache/archive
+LOGFILE=/mnt/brueckencache/podcatch/archive.log
 
 archive () {
     echo "$(date) [archive] starting"

@@ -20,7 +20,7 @@
 #
 
 
-RUN_DIR=/mnt/slugspace/podcatch
+RUN_DIR=/mnt/brueckencache/podcatch
 PODCATCH=src/podcatch.sh
 ARCHIVE=$RUN_DIR/src/archive.sh
 
@@ -30,7 +30,7 @@ log () {
 # log or die (test writable and so on...)
 log "starting up (at pid $$)" || exit
 
-disk_drive=/mnt/slugspace/incoming/podcasts
+disk_drive=/mnt/brueckencache/incoming/podcasts
 disk_limit=90
 
 percent_disk_usage () {
