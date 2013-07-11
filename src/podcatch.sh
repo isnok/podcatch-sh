@@ -17,9 +17,15 @@ FAILEDTXT=podcatch-failed.txt
 LASTFETCH=last-fetched-feed.txt
 LASTPARSE=last-parsed-feed.txt
 
-# setup some directories:
-LISTDIR="$(dirname $0)/../cfg"
-PLUGDIR="$(dirname $0)/../src/catchers"
+# setup some paths:
+here="$(dirname $0)"
+if [ "${here##/}" = "$here" ]; then
+    here=$PWD/$here
+fi
+LISTDIR="$here/../cfg"
+PLUGDIR="$here/catchers"
+SMARTDL="$here/smartdl.sh"
+unset here
 
 # create a directory for temporary files
 TMPDIR="$PWD/$(mktemp -d castget-XXXXXX)"
@@ -30,15 +36,6 @@ be_alive () {
     touch "$TMPDIR/podcatch.alive"
 }
 
-cleanup () {
-    status=$?
-    log "[script] cleanup $TMPDIR && exit $status"
-    rm -rvf "$TMPDIR"
-    exit $status
-}
-
-trap cleanup HUP INT KILL
-
 # logfile should of course be writable
 LOGFILE="$PWD/podcatch.log"
 NEWLIST="$PWD/podcatch-fetched.m3u"
@@ -48,6 +45,14 @@ log () {
     be_alive || cleanup
 }
 
+cleanup () {
+    status=$?
+    log "[script] cleanup $TMPDIR && exit $status"
+    rm -rvf "$TMPDIR"
+    exit $status
+}
+
+trap cleanup HUP INT KILL
 
 log "[script] running at pid $$, tmpdir: $TMPDIR" || exit
 echo -n $$ > "$TMPDIR/podcatch.pid"
@@ -98,7 +103,6 @@ set_dlroot () {
     log "[set_dlroot] $1"
 }
 
-# a helper function
 line_count () {
     wc -l "$1" | sed 's/^ *\([0-9][0-9]*\) .*$/\1/'
 }
@@ -108,7 +112,7 @@ fetch_episode () {
     if [ -f "$(basename $1)" ]; then
         wget_args="-c"
     fi
-    wget $wget_args "$1"
+    $SMARTDL $wget_args "$1"
     wget_status=$?
     if [ $wget_status = 0 ]; then
         episode_fetched "$1"
@@ -122,9 +126,10 @@ fetch_episode () {
 }
 
 episode_fetched () {
-    log "[episode_fetched] $1"
+    fetched="$PWD/$(basename $1)"
+    log "[episode_fetched] $fetched"
     echo "$1" >> "$FETCHDTXT"
-    echo "$PWD/$(basename $1)" >> "$NEWLIST"
+    echo "$fetched" >> "$NEWLIST"
 }
 
 episode_failed () {
