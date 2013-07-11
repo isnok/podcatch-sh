@@ -14,7 +14,7 @@
 # assumed static values:
 FETCHDTXT=podcatch-dontfetch.txt
 FAILEDTXT=podcatch-failed.txt
-LASTFETCH=last-feed-fetched.txt
+LASTFETCH=last-fetched-feed.txt
 LASTPARSE=last-parsed-feed.txt
 
 # setup some directories:
@@ -25,6 +25,8 @@ PLUGDIR="$(dirname $0)/../src/catchers"
 TMPDIR="$PWD/$(mktemp -d castget-XXXXXX)"
 
 be_alive () {
+    # do something in the temp directory,
+    # to not be killed by the second cronjob
     touch "$TMPDIR/podcatch.alive"
 }
 
@@ -39,6 +41,7 @@ trap cleanup HUP INT KILL
 
 # logfile should of course be writable
 LOGFILE="$PWD/podcatch.log"
+NEWLIST="$PWD/podcatch-fetched.m3u"
 
 log () {
     echo "$(date) $1" | tee -a "$LOGFILE"
@@ -113,14 +116,15 @@ fetch_episode () {
         if [ -z "$wget_args" ]; then
             episode_failed "$wget_status" "$1"
         else
-            continued_fetch "$wget_status" "$1"
+            continue_failed "$wget_status" "$1"
         fi
     fi
 }
 
 episode_fetched () {
     log "[episode_fetched] $1"
-    echo "$1" >> $FETCHDTXT
+    echo "$1" >> "$FETCHDTXT"
+    echo "$PWD/$(basename $1)" >> "$NEWLIST"
 }
 
 episode_failed () {
@@ -131,15 +135,15 @@ episode_failed () {
     fi
 }
 
-continued_fetch () {
-    log "[continued_fetch] exit status: $1 - $2"
-    #echo "$1" >> $FETCHDTXT
+continue_failed () {
+    log "[continue_failed] exit status: $1 - $2"
+    #echo "$1" >> "$FETCHDTXT"
     if grep -q "$2" $FAILEDTXT; then
-        log "[continued_fetch] happened before -> giving up"
-        echo "$2" >> $FETCHDTXT
+        log "[continue_failed] happened before -> giving up"
+        echo "$2" >> "$FETCHDTXT"
     else
-        log "[continued_fetch] first time -> $FAILEDTXT"
-        echo "$2" >> $FAILEDTXT
+        log "[continue_failed] first time -> $FAILEDTXT"
+        echo "$2" >> "$FAILEDTXT"
     fi
 }
 
@@ -152,7 +156,7 @@ catch_episodes () {
             epicnt=$((1+$epicnt))
             cd "$2"
             fetch_episode "$episode"
-            cd $OLDPWD
+            cd "$OLDPWD"
         done < "$1"
         log "[catch_episodes:$castcnt] finished catching $epiall episode(s) to $2"
     else
