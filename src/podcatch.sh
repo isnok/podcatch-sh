@@ -30,19 +30,19 @@ unset here
 # create a directory for temporary files
 TMPDIR="$PWD/$(mktemp -d castget-XXXXXX)"
 
-be_alive () {
-    # do something in the temp directory,
-    # to not be killed by the second cronjob
-    touch "$TMPDIR/podcatch.alive"
-}
+#be_alive () {
+#    # do something in the temp directory,
+#    # to not be killed by the second cronjob
+#    touch "$TMPDIR/podcatch.alive"
+#}
 
 # logfile should of course be writable
 LOGFILE="$PWD/podcatch.log"
 NEWLIST="$PWD/podcatch-fetched.m3u"
 
 log () {
-    echo "$(date) $1" | tee -a "$LOGFILE"
-    be_alive || cleanup
+    echo "$(date) $@" | tee -a "$LOGFILE"
+    #be_alive || cleanup
 }
 
 cleanup () {
@@ -153,20 +153,22 @@ continue_failed () {
 }
 
 catch_episodes () {
+    #set -x
     if [ "$(cat $1)" ]; then
         epiall=$(line_count $1)
         log "[catch_episodes:$castcnt] $epiall new episode(s): $(basename $1) -> $2"
         epicnt=0
-        while read episode; do
+        while read episode; do # <-this does not work reliably :-o
             epicnt=$((1+$epicnt))
             cd "$2"
             fetch_episode "$episode"
             cd "$OLDPWD"
-        done < "$1"
+        done < "$1" # <- set -x tells, that all is fine, but still it breaks... (?)
         log "[catch_episodes:$castcnt] finished catching $epiall episode(s) to $2"
     else
         log "[catch_episodes:$castcnt] nothing new -> no action"
     fi
+    #set +x
 }
 
 cnt_name () {

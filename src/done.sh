@@ -1,3 +1,3 @@
 #!/bin/sh
 
-echo "$(date) [done] $@" >> /tmp/ctorrent_done
+echo "$(date) [ctorrent] done $@" >> /mnt/brueckencache/podcatch/smartdl.log
