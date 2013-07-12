@@ -158,7 +158,7 @@ catch_episodes () {
         epiall=$(line_count $1)
         log "[catch_episodes:$castcnt] $epiall new episode(s): $(basename $1) -> $2"
         epicnt=0
-        while read episode; do # <-this does not work reliably :-o
+        while read episode; do # <-this does not work reliably :-o (not even with cat)
             epicnt=$((1+$epicnt))
             cd "$2"
             fetch_episode "$episode"

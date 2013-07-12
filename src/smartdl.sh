@@ -58,7 +58,7 @@ download_torrent () {
     $CLASSICLOADER "$1" || true
     if [ -x "$(which $TORRENTCLIENT)" ]; then
         log "launching: $TORRENTCLIENT -dd -e 0 -X '/mnt/brueckencache/podcatch/src/done.sh $1 d:&d t:&t w:&w' $(basename $1)"
-        $TORRENTCLIENT -dd -e 2 -X "/mnt/brueckencache/podcatch/src/done.sh $1 d:&d t:&t w:&w" "$(basename $1)"
+        $TORRENTCLIENT -d -e 2 -X "/mnt/brueckencache/podcatch/src/done.sh $1 d:&d t:&t w:&w" "$(basename $1)"
     else
         log "not executable: $TORRENTCLIENT"
     fi
