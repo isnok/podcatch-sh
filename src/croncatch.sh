@@ -84,13 +84,15 @@ tidy_up () {
         PODCATCH="$PODCATCH -np all"
     fi
     if [ -d "$2" ]; then
-        if rm -r "$2"; then
+        if [ -f "$2/croncatch.protect" ]; then
+            log "protected: $2"
+        elif rm -r "$2"; then
             log "removed: $2"
         else
             log "removing $2 failed: $?"
         fi
     else
-        log "removed by auto-magic: $2"
+        log "(magically) disappeared: $2"
     fi
 }
 

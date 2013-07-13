@@ -1,14 +1,7 @@
 #!/bin/sh
 #
-# podcatch.sh - an attempt on catching casts with a shell script
+# podcatch.sh - An attempt on catching casts with a few shell scripts.
 #
-# Designed for minimal dependencies:
-# wget (and not even sed)
-#
-# TODO:
-#
-# * empty line behaviour in dontfetch
-# * convenient way(s) to add new casts
 #
 
 # assumed static values:
@@ -45,10 +38,22 @@ log () {
     #be_alive || cleanup
 }
 
+# set initial value for the DLDIR and options
+DLROOT=.
+uselast=""
+downloadepisodes=true
+initignoring=false
+preservetemp=false
+
 cleanup () {
     status=$?
-    log "[script] cleanup $TMPDIR && exit $status"
-    rm -rvf "$TMPDIR"
+    if $preservetemp || [ $status -gt 0 ]; then
+        log "[cleanup] cleanup: preserving $TMPDIR"
+        touch "$TMPDIR/croncatch.protect"
+    else
+        log "[cleanup] rm -rf $TMPDIR && exit $status"
+        rm -rf "$TMPDIR"
+    fi
     exit $status
 }
 
@@ -56,12 +61,6 @@ trap cleanup HUP INT KILL
 
 log "[script] running at pid $$, tmpdir: $TMPDIR" || exit
 echo -n $$ > "$TMPDIR/podcatch.pid"
-
-# set initial value for the DLDIR and options
-DLROOT=.
-uselast=""
-downloadepisodes=true
-initignoring=false
 
 usage () {
     self=$(basename $0)
@@ -84,6 +83,7 @@ To change behaviour of $self use:
     -da|--download-all  reset all -n options (default)
     -if|--init-fetched  if a new feed is found, initialize it's episodes as fetched
     -iw|--init-wanted   if a new feed is found, download all of it's episodes (default)
+    -kt|--keep-temp     keep the temp directory (for debugging mainly)
     -h|--help           print this help
 
 Note that if you use one of these, you should also specify a castlist.
@@ -334,6 +334,10 @@ else
             -iw|--init-wanted)
                 log "[args] init new feeds as: wanted"
                 initignoring=false
+                ;;
+            -kt|--keep-temp)
+                log "[args] will keep and protect temp dir: $TMPDIR"
+                preservetemp=true
                 ;;
             -h|--help)
                 usage
