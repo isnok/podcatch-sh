@@ -18,19 +18,53 @@
 # 05,23,42 * * * * /almost/20-min-wise
 # */15 * * * * /launch --every-15-minutes
 #
+IFS=
+PATH=/bin
+set -e
 
+#
+# prepare environment / configure podcatch
+#
+# cast list directory
+export LISTDIR=/mnt/brueckencache/podcatch/cfg
+# the default download destination
+export DLROOT=/mnt/brueckencache/incoming/podcasts
+# archive values
+export INCOMING=/mnt/brueckencache/incoming
+export ARCHIVE=/mnt/brueckencache/archive
+#
+# the other scripts
+SRCDIR=/mnt/brueckencache/podcatch/src
+ARCHIVER=$SRCDIR/archive.sh
+PODCATCH=$SRCDIR/podcatch.sh
+export FEEDER=$SRCDIR/grabfeed.sh
+export PARSERSHS=$SRCDIR/catchers
+export SMARTDL=$SRCDIR/smartdl.sh
+export DONESCRIPT=$SRCDIR/done.sh
+#
+# the location to where logs are written
+export LOGDIR=/mnt/brueckencache/podcatch
+#
+# logfile, list of newly downloaded files and error log
+export LOGFILE=$LOGDIR/podcatch.log
+export FETCH_LOG=$LOGDIR/podcatch-fetched.m3u
+export ERROR_LOG=$LOGDIR/podcatch-errors.log
+#
+# initial values for behaviour control options (see $FEEDER)
+export initignoring=false
+export fetchfeed=true
+export parsefeed=true
+export downloadepisodes=true
 
-RUN_DIR=/mnt/brueckencache/podcatch
-PODCATCH=src/podcatch.sh
-ARCHIVE=$RUN_DIR/src/archive.sh
+WATCHLIST=/tmp/croncatch.watch
 
 log () {
-    echo "$(date) [cron] $1" >> "$RUN_DIR/podcatch.log"
+    echo "$(date) [cron] $1" >> $LOGFILE
 }
-# log or die (test writable and so on...)
-log "starting up (at pid $$)" || exit
 
-disk_drive=/mnt/brueckencache/incoming/podcasts
+log "starting up (at pid $$)"
+
+disk_drive=$DLROOT
 disk_limit=90
 
 percent_disk_usage () {
@@ -53,14 +87,6 @@ still_running () {
     grep_pid $1 | grep -q "podcatch.sh"
 }
 
-mark () {
-    ls -rtl "$1" | grep -v croncatch.watch > "$1/croncatch.watch"
-}
-
-mark_hasnt_changed () {
-    test "$(ls -rtl "$1" | grep -v croncatch.watch)" = "$(cat $1/croncatch.watch)"
-}
-
 kill_stale () {
     kill $1
     killall wget
@@ -74,53 +100,28 @@ kill_stale () {
     fi
     killall -9 wget
     sleep 1
+    # for the case we killed a stalled download,
+    # we continue this time (full fetch next time)
+    rm -f $WATCHLIST
+    PODCATCH="$PODCATCH -np all"
 }
 
-tidy_up () {
-    if still_running $1; then
-        kill_stale $1
-        # for the case we killed a stalled download,
-        # we continue this time (full fetch next time)
-        PODCATCH="$PODCATCH -np all"
-    fi
-    if [ -d "$2" ]; then
-        if [ -f "$2/croncatch.protect" ]; then
-            log "protected: $2"
-        elif rm -r "$2"; then
-            log "removed: $2"
-        else
-            log "removing $2 failed: $?"
-        fi
+if pids=$(pidof podcatch.sh); then
+    log "found running pids: $pids"
+    touch $WATCHLIST
+    if [ x"$pids" = x"$(cat $WATCHLIST)" ]; then
+        for pid in $pids; do
+            kill_stale $pid
+        done
     else
-        log "(magically) disappeared: $2"
+        echo "$pids" > $WATCHLIST
     fi
-}
-
-log "checking tmpdir(s): $RUN_DIR/castget-*"
-for dir in $RUN_DIR/castget-*; do
-    if [ "$dir" = "$RUN_DIR/castget-*" ]; then
-        log "no tempdirs in $RUN_DIR"
-        break
-    fi
-    pid=$(cat $dir/podcatch.pid)
-    if [ ! -f "$dir/croncatch.watch" ]; then
-        log "mark $dir (pid: $pid)"
-        mark "$dir"
-    else
-        if mark_hasnt_changed "$dir"; then
-            log "stale dir: $dir (pid: $pid) -> will tidy up"
-            tidy_up "$pid" "$dir"
-        else
-            log "pid $pid is still alive: new mark $dir"
-            mark "$dir"
-        fi
-    fi
-done
+fi
 
 if [ -n "$(pidof podcatch.sh)" ]; then
     log "podcatch.sh is still running -> just archiving"
-    $ARCHIVE
+    $ARCHIVER
 else
-    log "launching: $RUN_DIR $ $PODCATCH || true && $ARCHIVE &"
-    cd "$RUN_DIR" && $PODCATCH || true && $ARCHIVE &
+    log "launching: $PODCATCH && $ARCHIVER &"
+    $PODCATCH || true && $ARCHIVER &
 fi

@@ -1,18 +1,18 @@
 # casts.lst - a config file for podcatch.sh
 #
-# you can just start listing our feeds.
+# you can almost instantlu start listing our feeds.
 #
-# to do so, compose lines like:
-# feed ---catcher--> directory
+# to do so, wht you really want to select is a set of parsers:
+PARSERS: audio
 #
-# * feed can be anything wget-able on your desired platform
+# and then fetch a feed like this:
+# feed ---> destination
+http://web.ard.de/radiotatort/rss/podcast.xml ---> /tmp/incoming/radiotatort
 #
-# * catcher selects the parser for the feed (from the plugin dir)
+# * a feed can be anything wget-able on your desired platform
+# * PARSERS selects the parsers for the feed (from the catchers dir)
 #
-# okay, so here's a feed:
-http://web.ard.de/radiotatort/rss/podcast.xml ---media--> /tmp/incoming/radiotatort
-
-# but normally it's more comfortable to choose an incoming directory
+# normally it's more comfortable to choose an incoming directory
 #
 # * if directory starts with a /,
 #       it is interpreted as an absolute path,
@@ -23,18 +23,17 @@ http://web.ard.de/radiotatort/rss/podcast.xml ---media--> /tmp/incoming/radiotat
 DLDIR=/tmp/incoming
 
 # and then download relative to the DLDIR:
-http://podcast.wdr.de/quarks.xml ---quarks--> quarks
+http://podcast.wdr.de/quarks.xml ---> quarks
 
 # download to absolute paths still work:
-http://www.hoaxilla.de/podcast/hoaxilla.xml ---hoax--> /tmp/incoming/hoaxilla
+http://www.hoaxilla.de/podcast/hoaxilla.xml ---> /tmp/incoming/hoaxilla
 
 # and, since this file is processed linewise,
 # you can even change the DLDIR in between ...
 DLDIR=/tmp
 
 # ... and following feeds will download relative to the new DLDIR
-http://dublab.com/feed/podcast ---audio--> incoming/dublab
+http://dublab.com/feed/podcast ---> incoming/dublab
 
 # final note:
 #   it might be wise to avoid encoding-related trouble whereever filenames occur
-

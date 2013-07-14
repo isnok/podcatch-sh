@@ -1,3 +1,4 @@
-DLDIR=/tmp/incoming/pritlove
-http://feeds.feedburner.com/cre-podcast ---audio--> cre
-http://feeds.feedburner.com/raumzeit-podcast ---media--> raumzeit
+DLDIR=pritlove
+PARSERS: everything
+http://feeds.feedburner.com/cre-podcast ---> cre
+http://feeds.feedburner.com/raumzeit-podcast ---> raumzeit

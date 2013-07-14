@@ -2,76 +2,85 @@
 #
 # podcatch.sh - An attempt on catching casts with a few shell scripts.
 #
+# Now including some good practises and paranoia hints found here:
 #
+#    - http://www.ooblick.com/text/sh/
+#
+IFS=
+PATH=/bin:/usr/bin
+set -e
 
-# assumed static values:
-FETCHDTXT=podcatch-dontfetch.txt
-FAILEDTXT=podcatch-failed.txt
-LASTFETCH=last-fetched-feed.txt
-LASTPARSE=last-parsed-feed.txt
-
-# setup some paths:
-here="$(dirname $0)"
-if [ "${here##/}" = "$here" ]; then
-    here=$PWD/$here
+if [ $# -gt 2 ] && [ x"$1" = x-c ]; then
+    CONFIG="$2"
+    export CONFIG
+    source "$CONFIG"
+    shift 2
 fi
-LISTDIR="$here/../cfg"
-PLUGDIR="$here/catchers"
-SMARTDL="$here/smartdl.sh"
+
+#
+# Set some (probably) sane defaults, derived from config values
+#
+here="$(dirname $0)"
+if [ x"${here##/}" = x"$here" ]; then
+    here="$PWD/$here"  # try to make a relative path absolute
+fi
+#
+# the cast list directory
+: ${LISTDIR:="$here/../cfg"}
+#
+# the other scripts
+: ${FEEDER:="$here/grabfeed.sh"}
+: ${PARSERSHS:="$here/catchers"}
+: ${SMARTDL:="$here/smartdl.sh"}
+: ${DONESCRIPT:="$here/done.sh"}
+export PARSERSHS SMARTDL DONESCRIPT
+#
+# the location to where logs are written
+: ${LOGDIR:="$here/.."}  # by default the root of the git repository
 unset here
+#
+# logfile, list of newly downloaded files and error log
+: ${LOGFILE:="$LOGDIR/podcatch.log"}
+: ${FETCH_LOG:="$LOGDIR/podcatch-fetched.m3u"}
+: ${ERROR_LOG:="$LOGDIR/podcatch-errors.log"}
+export LOGFILE FETCH_LOG ERROR_LOG
+#
+# initial values for behaviour control options
+# (all 'sh-boolean' and accessible via arguments - see end of script)
+#: ${preservetemp:=false}
+: ${initignoring:=false}
+: ${fetchfeed:=true}
+: ${parsefeed:=true}
+: ${downloadepisodes:=true}
+export initignoring fetchfeed parsefeed downloadepisodes
+#
+# set download root and make it an absolute path
+: ${DLROOT:="/tmp/incoming"}
+if [ x"${DLROOT##/}" = x"$DLROOT" ]; then
+    DLROOT="$PWD/$DLROOT"
+fi
+DLWORKDIR="$DLROOT"
 
-# create a directory for temporary files
-TMPDIR="$PWD/$(mktemp -d castget-XXXXXX)"
-
-#be_alive () {
-#    # do something in the temp directory,
-#    # to not be killed by the second cronjob
-#    touch "$TMPDIR/podcatch.alive"
-#}
-
-# logfile should of course be writable
-LOGFILE="$PWD/podcatch.log"
-NEWLIST="$PWD/podcatch-fetched.m3u"
-
+# define some helper functions:
+touch "$LOGFILE"
 log () {
     echo "$(date) $@" | tee -a "$LOGFILE"
-    #be_alive || cleanup
 }
 
-# set initial value for the DLDIR and options
-DLROOT=.
-uselast=""
-downloadepisodes=true
-initignoring=false
-preservetemp=false
-
-cleanup () {
-    status=$?
-    if $preservetemp || [ $status -gt 0 ]; then
-        log "[cleanup] cleanup: preserving $TMPDIR"
-        touch "$TMPDIR/croncatch.protect"
-    else
-        log "[cleanup] rm -rf $TMPDIR && exit $status"
-        rm -rf "$TMPDIR"
-    fi
-    exit $status
+err () {
+    touch "$ERROR_LOG"
+    echo "$(date) $@" | tee -a "$LOGFILE" "$ERROR_LOG" 1>&2
 }
-
-trap cleanup HUP INT KILL
-
-log "[script] running at pid $$, tmpdir: $TMPDIR" || exit
-echo -n $$ > "$TMPDIR/podcatch.pid"
 
 usage () {
     self=$(basename $0)
-    cat <<EOF
+    cat <<EOT
 $self - a shell scripted podcatcher for openwrt devices
 
 usage: $self [args/castlists]
 
 The arguments are processed in the order they are given.
-All arguments not listed below are treated as castlists.
-The castlists directory is configured in $self itself.
+All oter arguments not listed below are treated as castlists.
 'all' a is a special castlist, instructing to fetch all castlists.
 'all' is the default behaviour if no args are given.
 
@@ -83,7 +92,6 @@ To change behaviour of $self use:
     -da|--download-all  reset all -n options (default)
     -if|--init-fetched  if a new feed is found, initialize it's episodes as fetched
     -iw|--init-wanted   if a new feed is found, download all of it's episodes (default)
-    -kt|--keep-temp     keep the temp directory (for debugging mainly)
     -h|--help           print this help
 
 Note that if you use one of these, you should also specify a castlist.
@@ -95,170 +103,66 @@ Argument combos that drove development:
     $self -nf -ne jtv  # re-parse the previously fetched feeds from \$LISTDIR/jtv.lst
     $self -if cczwei -ne chaos -h -da casts # you get the idea...
 
-EOF
+EOT
 }
 
-set_dlroot () {
-    DLROOT="$1"
-    log "[set_dlroot] $1"
-}
+log "[podcatch] running at pid $$, tmpdir: $TMPDIR"
 
-line_count () {
-    wc -l "$1" | sed 's/^ *\([0-9][0-9]*\) .*$/\1/'
-}
-
-fetch_episode () {
-    log "[fetch_episode:$castcnt] ($epicnt/$epiall) $1"
-    if [ -f "$(basename $1)" ]; then
-        wget_args="-c"
-    fi
-    $SMARTDL $wget_args "$1"
-    wget_status=$?
-    if [ $wget_status = 0 ]; then
-        episode_fetched "$1"
+bye () {
+    status="${1:-$?}"
+    set +e
+    if [ "$status" -gt 0 ]; then
+        err "[podcatch] exit $status"
     else
-        if [ -z "$wget_args" ]; then
-            episode_failed "$wget_status" "$1"
-        else
-            continue_failed "$wget_status" "$1"
-        fi
+        log "[podcatch] done"
     fi
+    exit $status
 }
 
-episode_fetched () {
-    fetched="$PWD/$(basename $1)"
-    log "[episode_fetched] $fetched"
-    echo "$1" >> "$FETCHDTXT"
-    echo "$fetched" >> "$NEWLIST"
-}
+trap bye HUP INT KILL
 
-episode_failed () {
-    log "[episode_failed] exit status: $1 - $2"
-    # if no file was created, we issue a warning
-    if [ ! -f "$(basename $2)" ]; then
-        log "[episode_failed] file $(basename $2) was not even created :-("
-    fi
-}
+##
+#  all set! let's start up the fun.
+##
 
-continue_failed () {
-    log "[continue_failed] exit status: $1 - $2"
-    #echo "$1" >> "$FETCHDTXT"
-    if grep -q "$2" $FAILEDTXT; then
-        log "[continue_failed] happened before -> giving up"
-        echo "$2" >> "$FETCHDTXT"
+set_workdir () {
+    if [ x"${1##/}" = x"$1" ]; then
+        DLWORKDIR="$DLROOT/$1"  # make relative path absolute
     else
-        log "[continue_failed] first time -> $FAILEDTXT"
-        echo "$2" >> "$FAILEDTXT"
+        DLWORKDIR="$1"
     fi
+    log "[chdir] $DLWORKDIR"
+    mkdir -p "$DLWORKDIR"
+    cd "$DLWORKDIR"
 }
+set_workdir "$DLROOT"
 
-catch_episodes () {
-    #set -x
-    if [ "$(cat $1)" ]; then
-        epiall=$(line_count $1)
-        log "[catch_episodes:$castcnt] $epiall new episode(s): $(basename $1) -> $2"
-        epicnt=0
-        while read episode; do # <-this does not work reliably :-o (not even with cat)
-            epicnt=$((1+$epicnt))
-            cd "$2"
-            fetch_episode "$episode"
-            cd "$OLDPWD"
-        done < "$1" # <- set -x tells, that all is fine, but still it breaks... (?)
-        log "[catch_episodes:$castcnt] finished catching $epiall episode(s) to $2"
-    else
-        log "[catch_episodes:$castcnt] nothing new -> no action"
-    fi
-    #set +x
-}
-
-cnt_name () {
-    echo "$(basename $1) $(wc -l "$1" | sed 's/^ *\([0-9][0-9]*\) .*$/{\1}/')"
-}
-
-calc_catch () {
-    if [ -f "$2" ]; then
-        if [ "$(cat $2)" ]; then
-            grep -v -f "$2" "$1" > "$3"
-            #grep -v -x -f "$2" "$1" > "$3"
-        else
-            cp -v "$1" "$3"
-        fi
-    else
-        if $initignoring; then
-            log "[calc_catch:$castcnt] bootstrap $FETCHDTXT from $(basename $1)"
-            cp -v "$1" "$2"
-            touch "$3"
-        else
-            log "[calc_catch:$castcnt] bootstrap using empty $FETCHDTXT"
-            touch "$2"
-            cp -v "$1" "$3"
-        fi
-    fi
-    log "[calc_catch:$castcnt] $(cnt_name $1) - $(cnt_name $2) = $(cnt_name $3)"
-}
-
-parse_feed () {
-    log "[parse_feed:$castcnt] $SHELL $1.sh $(basename $2) | sort | uniq > $(basename $3)"
-    $SHELL "$PLUGDIR/$1.sh" "$2" | sort | uniq > "$3"
-}
-
-
-fetch_feed () {
-    log "[fetch_feed:$castcnt] $1 -> $(basename $2)"
-    wget "$1" -O "$2"
-}
-
-catch_cast () {
-    mkdir -p "$4"
-    if [ -n "$uselast" ]; then
-        log "[catch_cast:$castcnt] reusing $LASTFETCH"
-        cp -v "$4/$LASTFETCH" "$2.feed"
-    else
-        fetch_feed "$1" "$2.feed"
-        cp -v "$2.feed" "$4/$LASTFETCH"
-    fi
-
-    if [ "$uselast" = parsed ]; then
-        log "[catch_cast:$castcnt] reusing $LASTPARSE"
-        cp -v "$4/$LASTPARSE" "$2.parsed"
-    else
-        parse_feed "$3" "$2.feed" "$2.parsed"
-        cp -v "$2.parsed" "$4/$LASTPARSE"
-    fi
-
-    calc_catch "$2.parsed" "$4/$FETCHDTXT" "$2.needfetch"
-
-    if $downloadepisodes; then
-        catch_episodes "$2.needfetch" "$4"
-    else
-        log "[catch_cast:$castcnt] skipping download of $(line_count $2.needfetch) episodes"
-    fi
+set_parsers () {
+    parsers=$(echo -n $1 | sed -e 's/^ *//' -e 's/  */ /g' -e 's/ *$//')
+    log "[parsers] $parsers"
 }
 
 inspect_line () {
     if echo "$1" | grep -q '^[ \t]*\(#.*\)\{0,1\}$'; then
         echo comment
-    elif echo "$1" | grep -q '...---.*-->[\t ]*.'; then
+    elif echo "$1" | grep -q ' ---> '; then
         echo feed
     elif [ ! "${1##DLDIR=}" = "$1" ]; then
-        echo setdldir
+        echo workdir
+    elif [ ! "${1##PARSERS:}" = "$1" ]; then
+        echo parsers
     else
         echo unknown
     fi
 }
 
 parse_line () {
-    url=$(echo -n "$1" | sed -n "s/^[ \t]*\([^ \t].*[^ \t]\)[ \t]*---.*/\1/p")
-
-    catcher=$(echo "$1" | grep -o -- ' ---.*--> ')
-    catcher="${catcher## ---}"
-    catcher="${catcher%%--> }"
-
-    destination=$(echo -n "$1" | sed -n "s/.*-->[ \t]*\([^ \t].*[^ \t]\)[ \t]*$/\1/p")
+    url=$(echo -n "$1" | sed -n "s/^[ \t]*\([^ \t].*[^ \t]\)[ \t]*--->.*/\1/p")
+    destination=$(echo -n "$1" | sed -n "s/.*--->[ \t]*\([^ \t].*[^ \t]\)[ \t]*$/\1/p")
     if [ "${destination##/}" = "$destination" ]; then
-        destination="$DLROOT/$destination"
+        destination="$DLWORKDIR/$destination"
     fi
-    log "[parse_line@$linecnt] $url ---$catcher--> $destination"
+    log "[parse_line@$linecnt] $url ---> $destination"
 }
 
 process () {
@@ -269,89 +173,85 @@ process () {
             comment|ignore)
                 #log "[process @ $linecnt] $line"
                 ;;
+            workdir)
+                log "[process@$linecnt] $line"
+                set_workdir "${line##DLDIR=}"
+                ;;
+            parsers)
+                log "[process@$linecnt] $line"
+                set_parsers "${line##PARSERS:}"
+                ;;
             feed)
                 castcnt=$((1+$castcnt))
-                log "[process@$linecnt] start catching cast number $castcnt"
                 parse_line "$line"
-                tmpname="$TMPDIR/$castcnt-$catcher"
-                catch_cast "$url" "$tmpname" "$catcher" "$destination"
-                log "[process@$linecnt] done catching cast number $castcnt"
-                ;;
-            setdldir)
-                log "[process@$linecnt] $line"
-                set_dlroot "${line##DLDIR=}"
+                "$FEEDER" "$url" "$destination" $parsers 2>&1 |
+                    tee -a "$LOGFILE" ||
+                    err "[process@$linecnt] $FEEDER failed ($?) :-?"
                 ;;
             *)
-                log "[process@$linecnt] buggy cfg? $line"
+                err "[process@$linecnt] $1 is buggy cfg? $line"
                 ;;
         esac
     done < "$1"
 }
 
-process_list () {
-    log "[$1] start processing: $list"
-    if [ -r "$2" ]; then
-        process "$2"
-    else
-        log "[$1] cannot access: $2"
-    fi
-}
-
-process_all () {
-    for castlist in "$LISTDIR"/*.lst; do
-        process_list process_all "$castlist"
+process_lists () {
+    listcnt=$#
+    while [ $# -gt 0 ]; do
+        curcnt=$((1+$listcnt-$#))
+        log "[process_list] ($curcnt/$listcnt) start: $1"
+        if [ -r "$1" ]; then
+            process "$1"
+        else
+            log "[process_list] ($curcnt/$listcnt) access error: $1"
+        fi
+        shift
     done
 }
 
 castcnt=0
 if [ $# = 0 ]; then
-    log "[args] no args -> process_all"
-    process_all
+    log "[script] no args -> process_all"
+    process_lists "$LISTDIR"/*.lst
 else
-    while [ -n "$1" ]; do
-        case "$1" in
-            -ne|--no-episodes)
-                log "[args] set download-episodes: false"
-                downloadepisodes=false
-                ;;
+    while [ $# -gt 0 ]; do
+        arg="$1"
+        shift
+        case "$arg" in
             -nf|--no-feeds)
-                log "[args] set uselast: feed"
-                uselast=feed
+                log "[args] set fetch-feed: false"
+                export fetchfeed=false
                 ;;
             -np|--no-parse)
-                log "[args] set uselast: parsed"
-                uselast=parsed
+                log "[args] set fetch-feed, parse-feed: false"
+                export fetchfeed=false parsefeed=false
+                ;;
+            -ne|--no-episodes)
+                log "[args] set fetch-episodes: false"
+                export downloadepisodes=false
                 ;;
             -da|--download-all)
                 log "[args] set download-*: true"
-                uselast=""
-                downloadepisodes=true
+                export fetchfeed=true parsefeed=true downloadepisodes=true
                 ;;
             -if|--init-fetched)
                 log "[args] init new feeds as: fetched"
-                initignoring=true
+                export initignoring=true
                 ;;
             -iw|--init-wanted)
                 log "[args] init new feeds as: wanted"
-                initignoring=false
-                ;;
-            -kt|--keep-temp)
-                log "[args] will keep and protect temp dir: $TMPDIR"
-                preservetemp=true
+                export initignoring=false
                 ;;
             -h|--help)
                 usage
                 ;;
             all)
-                log "[args] start processing: all"
-                process_all
+                process_lists "$LISTDIR"/*.lst
                 ;;
             *)
-                list="$LISTDIR/$1.lst"
-                process_list args "$list"
+                process_lists "$LISTDIR/$arg.lst"
                 ;;
         esac
-        shift
     done
 fi
-cleanup
+bye

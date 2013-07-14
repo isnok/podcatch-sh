@@ -2,41 +2,45 @@
 #
 # newcast.sh - a helper to find/develop the right catcher for your cast.
 #
+IFS=
+PATH=/bin:/usr/bin
+set -e
 
-PLUGDIR=$(dirname $0)/catchers # the catcher scripts
+# the link harvester scripts
+: ${PARSERSHS=$(dirname $0)/catchers}
+if [ ! x"${PARSERSHS##/}" = x"$PARSERSHS" ]; then
+    PARSERSHS="$PWD/$PARSERSHS"
+fi
 
-# create a directory for temporary files
-TMPDIR=$(mktemp -dt castget-new-XXXXXX)
+echo "[parsers]" $PARSERSHS/*.sh
 
-# remove previous ones, to ease tab-completion? tried it... sux
-#echo "==> cleanup"
-#rm -rvf $(ls -d $(dirname $TMPDIR)/castget-new-* | grep -v $TMPDIR)
+TMPDIR=/tmp/newcast
 
-# might not be needed here:
-#alias log='echo'
+tmp_feed=$TMPDIR/newcast.feed
+echo "[cast] $1"
+rm -f $tmp_feed
+mkdir -p $TMPDIR
+wget "$1" -O "$tmp_feed"
 
-run_parsers () {
-    ls $PLUGDIR/*.sh | while read parser_script; do
-        parser=$(basename $parser_script)
-        parser="${parser%%.sh}"
-        echo $parser
-        tmp_parsed="$TMPDIR/$parser.parsed"
-        $SHELL "$PLUGDIR/$parser.sh" "$1" > "$tmp_parsed"
-    done
-}
+ls $PARSERSHS/*.sh | while read full_path; do
+    script=$(basename $full_path)
+    parser="${script%%.sh}"
+    echo
+    echo "==> tryout parser: $parser"
+    tmp=$TMPDIR/$parser.parsed
+    $SHELL "$PARSERSHS/$parser.sh" "$tmp_feed" > $tmp || continue
+    if [ -s $tmp ]; then
+        echo "--> $parser results: $(wc -l $tmp)"
+        head -n2 $tmp
+        echo "..."
+        tail -n2 $tmp
+    fi
+done
+shift
 
-cnt_parsers () {
-    for parser in $1; do
-        tmp="$TMPDIR/$parser.parsed"
-        echo
-        echo "==> $parser: $(wc -l $tmp)"
-        if [ -s $tmp ]; then
-            echo "--> $2 ---$parser--> download_dir"
-            head -n2 $tmp
-            echo "..."
-            tail -n2 $tmp
-        fi
-    done
+echo "==> feed and parsing results are stored in $tmpdir"
+
+#cnt_parsers () {
     #echo
     #for parser in $1; do
         #echo -n "Give non-zero string to inspect '$parser': "
@@ -49,21 +53,4 @@ cnt_parsers () {
             ##read waitforenter
         #fi
     #done
-}
-
-new_cast () {
-    #echo "==> Available parsers:" $PLUGDIR/*.sh
-    feed="$1"
-    tmp_feed="$TMPDIR/new.feed"
-    wget "$feed" -O "$tmp_feed"
-    parsers="$(run_parsers $tmp_feed)"
-    cnt_parsers "$parsers" "$feed"
-    #calc_catch "$2.parsed" "$4/podcatch.dontfetch" "$2.needfetch"
-    #catch_episodes "$2.needfetch" "$4"
-}
-
-until [ $# = 0 ]; do
-    new_cast "$1"
-    shift
-done
-echo "==> last results stored in $TMPDIR"
+#}

@@ -1,3 +1,5 @@
-DLDIR=/tmp/incoming/cczwei
-http://www.cczwei.de/rss_issues.php ---audio--> podcast
-http://www.cczwei.de/rss_tvissues.php ---media--> tv
+DLDIR=cczwei
+PARSERS: audio
+http://www.cczwei.de/rss_issues.php ---> podcast
+PARSERS: video
+http://www.cczwei.de/rss_tvissues.php ---> tv

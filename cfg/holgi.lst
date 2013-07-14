@@ -1,8 +1,9 @@
-DLDIR=/tmp/incoming/holgi
-http://feeds.feedburner.com/wrint/wrint?format=xml ---media--> wrint
-http://feeds.feedburner.com/DieWrintheit?format=xml ---media--> wrintheit
-http://feeds.feedburner.com/WrintOrtsgespraeche?format=xml ---media--> ortsgespraeche
-http://feeds.feedburner.com/WrintFerngespraeche?format=xml ---media--> ferngespraeche
-http://feeds.feedburner.com/WrintRealitaetsabgleich?format=xml ---media--> realitaetsabgleich
-http://feeds.feedburner.com/WrintHolgerRuftAn?format=xml ---media--> ruftan
-http://feeds.feedburner.com/WrintFlaschen?format=xml ---media--> flaschen
+DLDIR=holgi
+PARSERS: audio tubes images
+http://feeds.feedburner.com/wrint/wrint?format=xml ---> wrint
+http://feeds.feedburner.com/DieWrintheit?format=xml ---> wrintheit
+http://feeds.feedburner.com/WrintOrtsgespraeche?format=xml ---> ortsgespraeche
+http://feeds.feedburner.com/WrintFerngespraeche?format=xml ---> ferngespraeche
+http://feeds.feedburner.com/WrintRealitaetsabgleich?format=xml ---> realitaetsabgleich
+http://feeds.feedburner.com/WrintHolgerRuftAn?format=xml ---> ruftan
+http://feeds.feedburner.com/WrintFlaschen?format=xml ---> flaschen

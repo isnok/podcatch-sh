@@ -1,13 +1,14 @@
-DLDIR=/tmp/incoming/chaos
-http://chaosradio.ccc.de/chaosradio-complete.rss ---audio--> chaosradio
-http://chaosradio.ccc.de/chaosradio_international-complete.rss ---audio--> chaosradio_intl
-http://chaosradio.ccc.de/chaos_tv-complete.rss ---media--> chaos_tv
+DLDIR=chaos
 
-http://alternativlos.org/ogg.rss ---audio--> alternativlos
+PARSERS: audio video tubes archives images docs other
+http://www.c3d2.de/podcast.xml ---> c3d2-pod
+http://www.c3d2.de/pentaradio.xml ---> c3d2-penta
+http://www.c3d2.de/news-rss.xml ---> c3d2-news
+http://alternativlos.org/ogg.rss ---> alternativlos
+http://fnordfunk.de/?feed=ogg ---> fnord
+http://fnordfunk.de/?feed=ogg_no_music ---> fnord_nomus
 
-http://fnordfunk.de/?feed=ogg ---audio--> fnord
-http://fnordfunk.de/?feed=ogg_no_music ---audio--> fnord_nomus
-
-http://www.c3d2.de/podcast.xml ---media--> c3d2-pod
-http://www.c3d2.de/pentaradio.xml ---media--> c3d2-penta
-http://www.c3d2.de/news-rss.xml ---media--> c3d2-news
+PARSERS: everything
+http://chaosradio.ccc.de/chaos_tv-complete.rss ---> chaos_tv
+http://chaosradio.ccc.de/chaosradio-complete.rss ---> chaosradio
+http://chaosradio.ccc.de/chaosradio_international-complete.rss ---> chaosradio_intl

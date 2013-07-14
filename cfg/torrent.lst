@@ -1,5 +1,8 @@
 # torrent test
 
-DLDIR=/mnt/brueckencache/incoming/podcasts
-http://feeds.tuxcode.org/k/stuff.txt ---media--> random-downloads
-http://bitlove.org/adamc1999/noagenda ---media--> random-downloads
+DLDIR=
+PARSERS: torrent images tubes
+http://feeds.tuxcode.org/k/stuff.txt ---> tux-downloads
+http://bitlove.org/adamc1999/noagenda/feed ---> noagenda-bitloved
+http://bitlove.org/maha/downloads.rss ---> mahas-bitlove
+http://bitlove.org/pattex/megamagisch_m4a/downloads.rss ---> megamagisch

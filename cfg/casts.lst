@@ -1,16 +1,22 @@
 # casts.lst - a config file for podcatch.sh
 #
 
-DLDIR=/tmp/incoming
+DLDIR=
+PARSERS: audio
 
-http://feeds.feedburner.com/RoguelikeRadio?format=xml ---audio--> roguelikeradio
-http://properlychilled.podomatic.com/rss2.xml ---audio--> properlychilled
-http://dublab.com/feed/podcast ---audio--> dublab
-http://dublab.com/feed/mp3 ---media--> dublab-mp3
+http://feeds.feedburner.com/RoguelikeRadio?format=xml ---> roguelikeradio
+http://properlychilled.podomatic.com/rss2.xml ---> properlychilled
+http://dublab.com/feed/podcast ---> dublab
 
-http://juggling.tv/blog ---jtv--> JTV
-http://juggling.tv/blog ---jtv-ipod--> JTV-mobile
+http://www.hoaxilla.de/podcast/hoaxilla.xml ---> hoaxilla
+http://angegraben.podcaster.de/angegraben.rss ---> angegraben
 
-http://www.hoaxilla.de/podcast/hoaxilla.xml ---audio--> hoaxilla
-http://angegraben.podcaster.de/angegraben.rss ---audio--> angegraben
-http://abgestuerzt.podspot.de/rss ---media--> absturz
+PARSERS: audio video
+http://dublab.com/feed/mp3 ---> dublab-mp3
+http://abgestuerzt.podspot.de/rss ---> absturz
+
+PARSERS: jtv
+http://juggling.tv/blog ---> JTV
+
+PARSERS: jtv-ipod
+http://juggling.tv/blog ---> JTV/ipod
