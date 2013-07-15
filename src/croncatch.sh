@@ -90,7 +90,7 @@ still_running () {
 kill_stale () {
     kill $1
     killall wget
-    sleep 1
+    sleep 3
     if still_running $1; then
         log "killing $1 failed: retrying -9"
         kill -9 $1
@@ -106,10 +106,10 @@ kill_stale () {
     PODCATCH="$PODCATCH -np all"
 }
 
-if pids=$(pidof podcatch.sh); then
+if pids=$(pidof podcatch.sh grabfeed.sh smartdl.sh); then
     log "found running pids: $pids"
     touch $WATCHLIST
-    if [ x"$pids" = x"$(cat $WATCHLIST)" ]; then
+    if [ x"pids" = x"$(cat $WATCHLIST)" ]; then
         for pid in $pids; do
             kill_stale $pid
         done
@@ -118,8 +118,8 @@ if pids=$(pidof podcatch.sh); then
     fi
 fi
 
-if [ -n "$(pidof podcatch.sh)" ]; then
-    log "podcatch.sh is still running -> just archiving"
+if [ -n "$(pidof podcatch.sh grabfeed.sh smartdl.sh)" ]; then
+    log "something is still running -> just archiving"
     $ARCHIVER
 else
     log "launching: $PODCATCH && $ARCHIVER &"

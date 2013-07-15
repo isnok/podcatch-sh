@@ -96,10 +96,14 @@ log "[grabfeed] starting: $feed --($parsers)--> $destination"
 bye () {
     status="${1:-$?}"
     set +e
+    if [ "$status" = 42 ]; then
+        log "[grabfeed] exit with running background job"
+        status=0
+    fi
     if [ "$status" -gt 0 ]; then
-        err "[grabfeed] exit $status"
+        err "[grabfeed] ($status) $feed"
     else
-        log "[grabfeed] done"
+        log "[grabfeed] grabbed: $feed"
     fi
     exit $status
 }

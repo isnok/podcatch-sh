@@ -27,8 +27,8 @@ set -e
 : ${LINKS_FAILED:="/dev/null"}
 export FETCH_LOG LINKS_DOWNED ERROR_LOG LINKS_FAILED
 
-TORRENTCLIENT="ctorrent -d -e 2"
-#YOUTUBEHELPER="youtube-dl -c -t"
+TORRENTCLIENT="ctorrent"
+YOUTUBEHELPER="youtube-dl"
 
 # and wrappers for using it
 finished () {
@@ -62,10 +62,11 @@ download_classic () {
     # the default way to download anything non-exceptionally
     link="$1"
     localname="$(basename $link)"
-    if [ -f $localname ]; then
+    resume=false
+    if [ -f "./$localname" ]; then
         resume=true
     fi
-    log "[wget] $link --> $localname"
+    log "[wget] $link -($resume)-> $localname"
     set +e
     if $resume; then
         wget -c "$link" -O "$localname" &&
@@ -88,14 +89,14 @@ download_torrent () {
     rm -f "$localtorrent"
     wget "$1" -O "$localtorrent"
     cd ..
-    if which $TORRENTCLIENT; then
-        DONECALL="$DONESCRIPT success $1 $localtorrent &d/${localtorrent%%.torrent}"
+    if which ctorrent; then
+        DONECALL="$DONESCRIPT success $1 $PWD/$localtorrent $PWD/${localtorrent%%.torrent}"
         set +e
-        if pidof podcatch.sh | grep -q " "; then
+        if pidof ctorrent | grep -q " "; then
             log "[torrent] delaying $localtorrent ($(pidof podcatch.sh))"
         else
-            log "[torrent] $TORRENTCLIENT -X '$DONECALL' torrents/$localtorrent"
-            $TORRENTCLIENT -X "LOGFILE='$LOGFILE' $DONECALL torrents/$localtorrent" || failed "$1" &
+            log "[torrent] $TORRENTCLIENT -d -e 2 -X '$DONECALL' torrents/$localtorrent"
+            $TORRENTCLIENT -d -e 2 -X "LOGFILE=$LOGFILE $DONECALL" "torrents/$localtorrent" || failed "$1" &
         fi
         bye 23  # download deferred...
     else
@@ -105,13 +106,13 @@ download_torrent () {
 }
 
 download_tube () {
-    if which $YOUTUBEHELPER; then
-        log "[tubes] $YOUTUBEHELPER $1"
+    if which youtube-dl; then
+        log "[tubes] $YOUTUBEHELPER -c -t $1"
         set +e
-        echo $YOUTUBEHELPER "$1" && finished "$1" "$PWD (new tube stuff)" || failed "$1"
+        echo $YOUTUBEHELPER -c -t "$1" && finished "$1" "$PWD (new tube stuff)" || failed "$1"
     else
-        err "[tubes] youtube-dl unavailable"
-        finished "$1" "no youtube-dl :-("
+        err "[tubes] no youtube-dl: $1"
+        failed "$1"
     fi
 }
 
@@ -157,7 +158,7 @@ bye () {
     status="${1:-$?}"
     set +e
     if [ $status = 0 ]; then
-        log "[smartdl] done"
+        exit
     elif [ $status = 23 ]; then
         log "[smartdl] done ;-)"
     else
