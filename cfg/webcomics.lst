@@ -1,0 +1,8 @@
+DLDIR=comics
+PARSERS: images
+
+http://www.temel-art.de/wordpress/ ---> putze
+http://xkcd.com/ ---> xkcd
+
+PARSERS: comics
+http://www.webcomic-verzeichnis.de/feeds/rss.xml ---> lotsof
