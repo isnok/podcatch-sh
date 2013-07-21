@@ -1,0 +1,8 @@
+DLDIR=stonerrock
+PARSERS: audio
+
+http://keefmaster.podomatic.com/ ---> keefmaster
+http://www.podfeed.net/podcast/Global+APathy+Metal+Podcast/13015 ---> apathy
+http://www.podfeed.net/podcast/Preying+Lizard+Music/6625 ---> lizard
+http://www.podfeed.net/podcast/Preying+Lizard+Musics+Hard+Rock+Pirate+Radio+Show/6609 ---> lizard_pirate
+http://stonerrocksunday.podbean.com/ ---> sunday

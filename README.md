@@ -16,7 +16,9 @@ podcatch-sh consists of a set of shell scripts to automate the following process
 All scripts do minimally require only the set of busybox built-ins, that come with OpenWRT by default.
 ctorrent and youtube-dl have been introduced as optional download helpers, expanding it's usefulness.
 
-Development is ongoing, so check again soon if you are interested in this kind of podcatching!
+Development is ongoing, and at the moment there are some known bugs (log messages getting duplicated)
+and probably even more unknown bugs, so check again or give feedback if you are interested in using
+these scripts!
 
 
 Help text of the podcast list downloader script:

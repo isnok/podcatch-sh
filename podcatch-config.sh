@@ -19,8 +19,8 @@
 : ${ERROR_LOG:="/dev/null"}
 
 # local directories:
-: ${SCRIPTDIR:="/home/kmartini/hackstuff/podcatch-sh/src"}
-: ${LISTDIR:="/home/kmartini/hackstuff/podcatch-sh/cfg"}
+: ${SCRIPTDIR:="$PWD/src"}
+: ${LISTDIR:="$PWD/cfg"}
 : ${DLROOT:="/tmp/configured_incoming"}
 
 # hard-code default options

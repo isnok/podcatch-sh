@@ -1,0 +1,11 @@
+DLDIR=reggae
+PARSERS: audio
+
+http://balaganjah.podomatic.com/ ---> balaganjah
+http://houseofreggae.podomatic.com/ ---> houseof
+http://jahworksradio.com/category/downloads/ ---> jahworks
+http://blrr.podomatic.com/ ---> biglove
+http://soulshake.podomatic.com/ ---> soulshake
+http://upsetter.net/podcast/bassculture.xml ---> basscult
+http://bigmikeydread.podomatic.com/ ---> mikey
+http://newromantic.blogg.se/ ---> newromantic

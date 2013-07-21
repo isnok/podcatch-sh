@@ -1,0 +1,7 @@
+DLDIR=jazzcasts
+PARSERS: audio
+
+http://www.bendingcorners.com/ ---> bending
+http://feeds.feedburner.com/NightPassagePodcast ---> nightpassage
+http://smoothjazzvibes.podomatic.com/rss2.xml ---> smoothvibes
+http://magnatune.com/podcasts/xml/jazz.xml ---> magnatune
