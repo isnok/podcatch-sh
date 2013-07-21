@@ -6,56 +6,70 @@ IFS=
 PATH=/bin:/usr/bin
 set -e
 
-#
-# Set some (probably) sane defaults, derived from environment variables
-#
-here="$(dirname $0)"
-if [ x"${here##/}" = x"$here" ]; then
-    here="$PWD/$here"  # try to make a relative path absolute
+: ${CONFIG:=$PWD/podcatch-config.sh}
+if [ -r "$CONFIG" ]; then
+    . "$CONFIG"
+    export CONFIG
 fi
-#
-# the directory containing feed parsers
-: ${PARSERSHS:="$here/catchers"}
-#
-# files that hold podcatching state (in destination directory)
-: ${LAST_FETCH:=last-fetched-feed.txt}
-: ${LAST_PARSE:=last-parsed-feed.txt}
-: ${LINKS_DOWNED:=podcatch-dontfetch.txt}
-# pass on configuration
+
+self=$(basename "$0")
+
+check_files_writable () {
+    for file in "$@"; do
+        test -w "$1" ||
+        test -w "$(dirname "$1")" ||
+        {
+            echo "[$self] not writable: $1" 1>&2
+            exit 1
+        }
+    done
+}
+
+check_files_writable \
+    ${LOGFILE:="/dev/stdout"} \
+    ${FETCH_LOG:="/dev/null"} \
+    ${LINKS_DOWNED:="/dev/null"} \
+    ${LINKS_FAILED:="/dev/null"} \
+    ${ERROR_LOG:="/dev/null"} \
+    ${LAST_FETCH:="last-fetched-feed.txt"} \
+    ${LAST_PARSE:="last-parsed"}
+
 export LINKS_DOWNED LINKS_FAILED
 export LOGFILE FETCH_LOG ERROR_LOG
-#
-# the smart downloader scripts
+
+prepend_if_relative () {
+    if [ x"${2##/}" = x"$2" ]; then
+        echo "$1/$2"  # try to make a relative path absolute
+    else
+        echo "$2"
+    fi
+}
+
+# Set some (probably) sane defaults,
+here="$(dirname "$0")"
+here="$(prepend_if_relative "$PWD" "$here")"
+: ${PARSERSHS:="$here/catchers"}
 : ${SMARTDL:="$here/smartdl.sh"}
 : ${DONESCRIPT:="$here/done.sh"}
 export DONESCRIPT
-#
+unset here
+
 # options for behaviour control ('sh-bools')
 # for now, these can only be set via the environment
 : ${initignoring:=false}
 : ${fetchfeed:=true}
-: ${parsefeed:=true}
+: ${reuseparse:=false}
 : ${downloadepisodes:=true}
-#
-# variables understood by $SMARTDL
-: ${FETCH_LOG:="$here/grabfeed-fetched.m3u"}
-: ${ERROR_LOG:="$here/grabfeed-errors.log"}
-#
-# make relevant variables available to $SMARTDL:
-export FETCH_LOG ERROR_LOG
-unset here
 
 log () {
     echo "$(date) $@"
 }
 
 err () {
-    touch "$ERROR_LOG"
     echo "$(date) $@" | tee -a "$ERROR_LOG" 1>&2
 }
 
 usage () {
-    self=$(basename $0)
     cat <<EOT
 $self - a shell scripted feed grabber
 
@@ -81,69 +95,73 @@ fi
 destination="."
 feed="$1"
 shift
+if [ -z "$feed" ]; then
+    err "[$self] empty feed -> bug?"
+    exit 1
+fi
+log "[$self] feed: $feed"
+
 if [ $# -gt 0 ]; then
     destination="$1"
     shift
-    while [ $# -gt 0 ]; do
-        parsers="$1\n$parsers"
-        shift
-    done
 fi
-: ${parsers:="everything"}
-parsers=$(echo -e -n $parsers | tr "\n" ' ' | sed -e 's/^ *//' -e 's/  */ /g' -e 's/ *$//')
-log "[grabfeed] starting: $feed --($parsers)--> $destination"
+if [ -z "$destination" ]; then
+    err "[$self] empty destination -> bug?"
+    exit 1
+elif ! mkdir -p "$destination"; then
+    err "[$self] could not create destination: $destination"
+    exit 1
+elif ! [ -w "$destination" ]; then
+    err "[$self] destination not writable: $destination"
+    exit 1
+fi
+
+lastfeed="$(prepend_if_relative "$destination" "$LAST_FETCH")"
+lastparse="$(prepend_if_relative "$destination" "$LAST_PARSE")"
+dontfetch="$(prepend_if_relative "$destination" "$LINKS_DOWNED")"
+failedlst="$(prepend_if_relative "$destination" "$LINKS_FAILED")"
+
+log "[$self] destination: $(prepend_if_relative "$PWD" "$destination")"
+
+log "[$self] parsers: ${@:-everything}"
 
 bye () {
     status="${1:-$?}"
     set +e
-    if [ "$status" = 42 ]; then
-        log "[grabfeed] exit with running background job"
-        status=0
-    fi
     if [ "$status" -gt 0 ]; then
-        err "[grabfeed] ($status) $feed"
+        err "[$self] error ($status) - $feed"
     else
-        log "[grabfeed] grabbed: $feed"
+        log "[$self] finished: $feed"
     fi
     exit $status
 }
 
 trap bye HUP INT KILL
 
-mkdir -p "$destination"
-
-lastfeed="$destination/$LAST_FETCH"
-lastparse="$destination/$LAST_PARSE"
-dontfetch="$destination/$LINKS_DOWNED"
-failedlst="$destination/$LINKS_FAILED"
-
 ##
 #  fetch feed
 ##
 
+# check reuse
 if $fetchfeed; then
     rm -f "$lastfeed"
 else
     if [ -r "$lastfeed" ]; then
-        log "[fetch_feed] reusing $lastfeed"
+        log "[$self] reusing $lastfeed"
     else
-        err "[fetch_feed] cannot reuse $lastfeed"
+        err "[$self] cannot reuse $lastfeed"
         rm -f "$lastfeed"
     fi
 fi
 
-line_count () {
-    wc -l "$@" | awk '{ print $1; }'
-}
-
 if [ ! -f "$lastfeed" ]; then
-    log "[fetch_feed] $feed"
-    wget "$feed" -O "$lastfeed" && {
-        log "[fetch_feed] success: $(wc $lastfeed)"
-    }  || {
-        err "[fetch_feed] failed to fetch feed :-("
+    log "[$self] $feed"
+    if wget "$feed" -O "$lastfeed"; then
+        log "[$self] success: $(wc $lastfeed)"
+    else
+        err "[$self] failed to fetch feed :-("
         bye 1
-    }
+    fi
 fi
 
 ##
@@ -151,68 +169,91 @@ fi
 ##
 
 # check reuse
-if $parsefeed; then
-    rm -f "$lastparse"
-else
-    if [ -r "$lastparse" ]; then
-        log "[parse_feed] reusing $lastparse"
-    else
-        err "[parse_feed] cannot reuse $lastparse"
-        rm -f "$lastparse"
-    fi
+if ! $reuseparse; then
+    rm -f "$lastparse"-*.txt
 fi
 
-# apply parsers
-if [ ! -f "$lastparse" ]; then
-    echo "$parsers" | tr " " "\n" | while read parser; do
-        sh "$PARSERSHS/$parser.sh" "$lastfeed"
-    done | sort | uniq > "$lastparse"
-    log "[parse_feed] harvested $(line_count $lastparse) links"
+# how to apply one parser
+parse_feed () {
+    parsed="$lastparse-$1.txt"
+
+    # log reuse
+    if [ -r "$parsed" ]; then
+        log "[$self] reusing $parsed"
+    elif $reuseparse; then
+        err "[$self] cannot reuse $parsed"
+        rm -f "$parsed"
+    fi
+
+    parser="$PARSERSHS/$1.sh"
+    if ! [ -x "$parser" ]; then
+        err "[$self] not executable: $parser -> ignoring"
+        touch "$parsed"
+    fi
+
+    if [ -r "$parsed" ]; then
+        return
+    fi
+    "$parser" "$lastfeed" > "$parsed" || true
+    log "[$self] filtered: $1 -> $(wc -l "$parsed")"
+}
+
+# harvest links (apply parsers)
+if [ $# = 0 ]; then
+    parse_feed everything
+else
+    while [ $# -gt 0 ]; do
+        parse_feed "$1"
+        shift
+    done
 fi
+
+harvested="$(sort "$lastparse"-*.txt | uniq)"
+if [ -z "$harvested" ]; then
+    log "[$self] no links harvested -> ???"
+    bye 1
+fi
+harvestedcnt="$(echo "$harvested" | wc -l)"
 
 # check for new cast (via dontfetch)
-if [ ! -f "$dontfetch" ]; then
+if ! [ -r "$dontfetch" ]; then
     if $initignoring; then
-        log "[init_cast] bootstrap $LINKS_DOWNED from $lastparse"
+        log "[$self] init $dontfetch from $lastparse"
         cp "$lastparse" "$dontfetch"
     else
-        log "[init_cast] bootstrap using empty $LINKS_DOWNED"
+        log "[$self] init with empty $dontfetch"
         touch "$dontfetch"
     fi
 fi
 
 # filter harvested links
 if [ -s "$dontfetch" ]; then
-    needfetch="$(grep -v -f $dontfetch $lastparse || true)"
-    #needfetch="$(grep -v -x -f $dontfetch $lastparse || true)"
-elif [ -s "$lastparse" ]; then
-    needfetch="$(cat $lastparse)"
+    needfetch="$(echo -n "$harvested" | grep -v -f "$dontfetch" || true)"
+    #needfetch="$(echo -n "$harvested" | grep -v -x -f "$dontfetch" || true)"
 else
-    needfetch=""
+    needfetch="$harvested"
 fi
+
+if [ -z "$needfetch" ]; then
+    #log "[$self] nothing new"
+    bye
+fi
+fetchcnt="$(echo "$needfetch" | wc -l)"
 
 ##
 #  download episodes
 ##
+log "[$self] harvested {$harvestedcnt} - dontfetch {$(wc -l "$dontfetch" | cut -d" " -f1)} = needfetch {$fetchcnt}"
 
-if [ -z "$needfetch" ]; then
-    log "[calc_catch] nothing new"
-    bye 42
-else
-    newcnt="$(echo $needfetch | line_count)"
+if ! $downloadepisodes; then
+    log "[$self] skipping download of $fetchcnt new episodes"
+    bye
 fi
 
-if $downloadepisodes; then
-    log "[calc_catch] will download $newcnt new links"
-else
-    log "[calc_catch] skipping download of $newcnt new links"
-    bye 42
-fi
-
-epicnt=0
+curfetch=0
 echo "$needfetch" | while read link; do
-    epicnt=$((1+$epicnt))
-    log "[fetch_episode] ($epicnt/$newcnt) $link --> $destination"
+    curfetch=$((1+$curfetch))
+    log "[$self] ($curfetch/$fetchcnt) $link --> $destination"
 
     cd "$destination"
     set +e
@@ -221,13 +262,12 @@ echo "$needfetch" | while read link; do
     set -e
     cd "$OLDPWD"
 
-    if [ $status = 0 ]; then
-        log "[episode_fetched] $link"
-        echo "$link" >> "$dontfetch"
-    elif [ $status = 23 ]; then
-        log "[episode_deferred] $link"
-    else
-        log "[episode_failed] exited $status: $link"
-    fi
+    #if [ $status = 0 ]; then
+    #    log "[$self] $link"
+    #elif [ $status = 23 ]; then
+    #    log "[$self] $link"
+    #else
+    #    log "[$self] downloader exit: $status"
+    #fi
 done
 bye
