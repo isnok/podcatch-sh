@@ -1,3 +1,3 @@
 #!/bin/sh
 
-grep -io 'http://[^ ]*\.\(torrent\|nfo\)' "$1"
+grep -io 'http://[^ "<]*\.\(torrent\|nfo\)' "$1"
