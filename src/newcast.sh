@@ -12,9 +12,9 @@ if [ ! x"${PARSERSHS##/}" = x"$PARSERSHS" ]; then
     PARSERSHS="$PWD/$PARSERSHS"
 fi
 
-echo "[parsers]" $PARSERSHS/*.sh
+echo "available parsers: " $PARSERSHS/*.sh
 
-TMPDIR=/tmp/newcast
+TMPDIR=/tmp/newcast.sh
 
 tmp_feed=$TMPDIR/newcast.feed
 echo "[cast] $1"
@@ -26,19 +26,24 @@ ls $PARSERSHS/*.sh | while read full_path; do
     script=$(basename $full_path)
     parser="${script%%.sh}"
     echo
-    echo "==> tryout parser: $parser"
+    echo "==> trying parser: $parser" 1>&2
     tmp=$TMPDIR/$parser.parsed
     $SHELL "$PARSERSHS/$parser.sh" "$tmp_feed" > $tmp || continue
     if [ -s $tmp ]; then
         echo "--> $parser results: $(wc -l $tmp)"
-        head -n2 $tmp
-        echo "..."
-        tail -n2 $tmp
+        if [ $(cat $tmp | wc -l) -gt 5 ]; then
+            head -n2 $tmp
+            echo "..."
+            tail -n2 $tmp
+        else
+            cat $tmp
+        fi
     fi
-done
+done > $TMPDIR/parser-results.txt
 shift
 
-echo "==> feed and parsing results are stored in $tmpdir"
+echo "==> feed and parsing results were stored in $TMPDIR"
+cat $TMPDIR/parser-results.txt
 
 #cnt_parsers () {
     #echo
