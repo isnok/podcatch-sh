@@ -5,128 +5,67 @@
 # i'll try this approach:
 #
 # leave the pluggability of podcatch.sh as is (feed parsing only),
-# and instead of adding a new plugin slot for torrent/*tube type downloads,
-# i'd like to try out how far auto-detection from the link scales.
-# it's gonna be a nice ~/bin script anyway.
+# and instead of adding a plugin slot for different download types,
+# i'd like to try out how far auto-detection of links scales.
+# it's gonna result in a nice ~/bin script anyway.
 #
-IFS=
+# exit statuses (stati?):
+#
+#    0: download finished successfully
+#    1: an error ocurred (usually while trying to download)
+#   23: the download was started as a background job
+# else: if a command fails unexpectedly, it's exit status is passed through
+#
+# to ease things at development start, i'll only implement downloading
+# the first command line argument (link) to the current directory.
+IFS=" "
 PATH=/bin:/usr/bin
 set -e
 
-# to ease things for now, we only support downloading the
-# first command line argument to the current directory.
-#
-# to start off, the available download-helpers can be configured here:
+: ${CONFIG:=$PWD/podcatch-config.sh}
+if [ -r "$CONFIG" ]; then
+    . "$CONFIG"
+    export CONFIG
+fi
 
-# the callback companion
-: ${DONESCRIPT:="$(dirname $0)/done.sh"}
-# and vars to be carried over to it
-: ${FETCH_LOG:="/dev/null"}
-: ${ERROR_LOG:="/dev/null"}
-: ${LINKS_DOWNED:="/dev/null"}
-: ${LINKS_FAILED:="/dev/null"}
+self="$(basename "$0")"
+
+check_files_writable () {
+    for file in "$@"; do
+        test -w "$1" ||
+        test -w "$(dirname "$1")" ||
+        {
+            echo "[$self] not writable: $1" 1>&2
+            exit 1
+        }
+    done
+}
+
+check_files_writable \
+    ${LOGFILE:="/dev/stdout"} \
+    ${FETCH_LOG:="/dev/null"} \
+    ${LINKS_DOWNED:="/dev/null"} \
+    ${LINKS_FAILED:="/dev/null"} \
+    ${ERROR_LOG:="/dev/null"}
+
+: ${SCRIPTDIR:="$(dirname "$0")"}
+: ${DONESCRIPT:="$SCRIPTDIR/done.sh"}
 export FETCH_LOG LINKS_DOWNED ERROR_LOG LINKS_FAILED
 
-TORRENTCLIENT="ctorrent"
-YOUTUBEHELPER="youtube-dl"
-
-# and wrappers for using it
-finished () {
-    "$DONESCRIPT" success "$@"
-}
-
-failed () {
-    "$DONESCRIPT" fail "$1"
-}
-
-# we will end up launching the function: download_$(inspect_link)
-inspect_link () {
-    if [ -z "$1" ]; then
-        echo nothing
-    elif [ ! "${1%%.torrent}" = "$1" ]; then
-        echo torrent
-    elif [ ! "${1##http://www.youtube.com/}" = "$1" ]; then
-        echo tube
-    else
-        echo classic
-    fi
-}
-
-download_nothing () {
-    err "[download] empty link -> bug?"
-    set +e
-    false
-}
-
-download_classic () {
-    # the default way to download anything non-exceptionally
-    link="$1"
-    localname="$(basename $link)"
-    resume=false
-    if [ -f "./$localname" ]; then
-        resume=true
-    fi
-    log "[wget] $link -($resume)-> $localname"
-    set +e
-    if $resume; then
-        wget -c "$link" -O "$localname" &&
-            finished "$link" "$PWD/$localname" ||
-            failed "$link"
-    else
-        #echo wget "$link" -O "$localname" &&
-        #    finished "$link" "$PWD/$localname" ||
-        #    failed "$link"
-        wget "$link" -O "$localname" &&
-            finished "$link" "$PWD/$localname"
-            # just fail on continue seems okay for now
-    fi
-}
-
-download_torrent () {
-    localtorrent="$(basename $1)"
-    mkdir -p torrents
-    cd torrents
-    rm -f "$localtorrent"
-    wget "$1" -O "$localtorrent"
-    cd ..
-    if which ctorrent; then
-        DONECALL="$DONESCRIPT success $1 $PWD/$localtorrent $PWD/${localtorrent%%.torrent}"
-        set +e
-        if pidof ctorrent | grep -q " "; then
-            log "[torrent] delaying $localtorrent ($(pidof podcatch.sh))"
-        else
-            log "[torrent] $TORRENTCLIENT -d -e 2 -X '$DONECALL' torrents/$localtorrent"
-            $TORRENTCLIENT -d -e 2 -X "LOGFILE=$LOGFILE $DONECALL" "torrents/$localtorrent" || failed "$1" &
-        fi
-        bye 23  # download deferred...
-    else
-        err "[torrent] ctorrent not available to further process $localtorrent"
-        finished "$1" "$localtorrent"
-    fi
-}
-
-download_tube () {
-    if which youtube-dl; then
-        log "[tubes] $YOUTUBEHELPER -c -t $1"
-        set +e
-        echo $YOUTUBEHELPER -c -t "$1" && finished "$1" "$PWD (new tube stuff)" || failed "$1"
-    else
-        err "[tubes] no youtube-dl: $1"
-        failed "$1"
-    fi
-}
+# download-helper configuration
+: ${DEFAULTLOADER:="wget"} ${WGET_ARGS:=""}
+: ${TORRENTCLIENT:="ctorrent"} ${TORRENT_ARGS:="-e 2 -d"}
+: ${YOUTUBEHELPER:="youtube-dl"} ${YOUTUBE_ARGS:="-c -t"}
 
 log () {
     echo "$(date) $@"
 }
 
 err () {
-    touch "$ERROR_LOG"
     echo "$(date) $@" | tee -a "$ERROR_LOG" 1>&2
 }
 
 usage () {
-    self=$(basename $0)
     cat <<EOT
 $self - a link type aware downloader script
 
@@ -152,17 +91,15 @@ if [ $# = 0 ]; then
     exit
 fi
 
-log "[smartdl] startup: $PWD"
-
 bye () {
     status="${1:-$?}"
     set +e
     if [ $status = 0 ]; then
         exit
     elif [ $status = 23 ]; then
-        log "[smartdl] done ;-)"
+        log "[$self] background job: ${!:-none}"
     else
-        err "[smartdl] exit $status"
+        err "[$self] exit $status"
     fi
     exit $status
 }
@@ -173,7 +110,88 @@ trap bye HUP INT KILL
 #  all set! let's start it up!
 ##
 
-linktype="$(inspect_link $1)"
-log "[link_type] $linktype: $1"
-download_$linktype "$1"
+# wrappers for calling $DONESCRIPT
+finished () {
+    "$DONESCRIPT" success "$@"
+}
+
+failed () {
+    status=$?
+    "$DONESCRIPT" "$status" "$@"
+}
+
+# link type detection (to be improved)
+link="$1"
+if [ -z "$1" ]; then
+    link_type=nothing
+elif [ ! "${1%%.torrent}" = "$1" ]; then
+    link_type=torrent
+elif [ ! "${1##http://www.youtube.com/}" = "$1" ]; then
+    link_type=youtube
+else
+    link_type=wget
+fi
+
+log "[$self] detected link type: $link_type"
+
+# now define the download methods for these types
+
+download_nothing () {
+    err "[$self] empty link -> bug?"
+    set +e
+    false
+}
+
+download_wget () {
+    link="$1"
+    localname="$(basename "$link")"
+    if [ -f "$localname" ]; then
+        log "[wget] resuming: $localname"
+        WGET_ARGS="-c $WGET_ARGS"
+    else
+        log "[wget] new file: $localname"
+    fi
+    set +e
+    $DEFAULTLOADER $WGET_ARGS "$link" -O "$localname" &&
+            finished "$link" "$PWD/$localname" || failed "$link"
+}
+
+download_torrent () {
+    mkdir -p torrents
+    torrentfile="$(basename "$1")"
+    localtorrent="torrents/$(basename "$1")"
+    rm -f "$localtorrent"
+    $DEFAULTLOADER $WGET_ARGS "$1" -O "$localtorrent" || failed "$1"
+    if which ctorrent; then
+        DONECALL="$DONESCRIPT success $1 $PWD/$localtorrent $PWD/${torrentfile%%.torrent}"
+        set +e
+        if pidof "$TORRENTCLIENT" | grep -q " "; then
+            log "[torrent] runnning: $(pidof "$TORRENTCLIENT") -> delaying $localtorrent"
+        else
+            log "[torrent] launching: $TORRENTCLIENT $TORRENT_ARGS $localtorrent"
+            TORRENT_ARGS="$TORRENT_ARGS -X 'CONFIG=$CONFIG $DONECALL'"
+            "$TORRENTCLIENT" $TORRENT_ARGS "torrents/$localtorrent" ||
+                failed "$1" &
+        fi
+        bye 23  # download deferred...
+    else
+        err "[torrent] $TORRENTCLIENT not available $localtorrent"
+        finished "$1" "$PWD/$localtorrent"  # stops retrying.
+    fi
+}
+
+download_youtube () {
+    if which $YOUTUBEHELPER; then
+        log "[youtube] $YOUTUBEHELPER $YOUTUBE_ARGS $1"
+        set +e
+        "$YOUTUBEHELPER" $YOUTUBE_ARGS "$1" &&
+            finished "$1" "$PWD/$("$YOUTUBEHELPER" $YOUTUBE_ARGS "$1")" ||
+            failed "$1"
+    else
+        err "[youtube] no $YOUTUBEHELPER :-("
+        failed "$1"
+    fi
+}
+
+download_$link_type "$1"
 bye $?

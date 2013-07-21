@@ -6,36 +6,44 @@ IFS=
 PATH=/bin:/usr/bin
 set -e
 
-#
-# some environmental config
-#
-# all infos are sent to
-: ${LOGFILE:="/dev/stdout"}
-# fetched files are appended to
-: ${FETCH_LOG:="/dev/null"}
-# and fetched links are appended to
-: ${LINKS_DOWNED:="/dev/null"}
-# failed links are kept in
-: ${LINKS_FAILED:="/dev/null"}
-# and global feedback on errors is given to
-: ${ERROR_LOG:="/dev/null"}
+: ${CONFIG:=$PWD/podcatch-config.sh}
+if [ -r "$CONFIG" ]; then
+    . "$CONFIG"
+fi
 
-touch "$LOGFILE"
+self="$(basename "$0")"
+
+check_files_writable () {
+    for file in "$@"; do
+        test -w "$1" ||
+        test -w "$(dirname "$1")" ||
+        {
+            echo "[$self] not writable: $1" 1>&2
+            exit 1
+        }
+    done
+}
+
+check_files_writable \
+    ${LOGFILE:="/dev/stdout"} \
+    ${FETCH_LOG:="/dev/null"} \
+    ${LINKS_DOWNED:="/dev/null"} \
+    ${LINKS_FAILED:="/dev/null"} \
+    ${ERROR_LOG:="/dev/null"}
+
 log () {
     echo "$(date) $@" >> "$LOGFILE"
 }
 
 err () {
-    touch "$ERROR_LOG"
     echo "$(date) $@" | tee -a "$ERROR_LOG" >> "$LOGFILE"
 }
 
 usage () {
-    self=$(basename $0)
     cat <<EOT
 $self - on finish reporter for smartdl background downloads
 
-usage: $self <success|fail> <link> [downloaded file(s)]
+usage: $self <success|exit_status> <link> [downloaded file(s)]
 
     $self is not intended to be used interactively, but
     invoking it without any args will bring up this info text.
@@ -58,34 +66,41 @@ fi
 ##
 
 if [ $# -lt 2 ]; then
-    err "[done] was called with wrong arg count ($#): $@"
+    err "[$self] called with wrong arg count: $# ($@)"
     exit 1
 fi
-outcome="$1"
+status="$1"
 shift
 link="$1"
+if [ -z "$link" ]; then
+    err "[$self] got empty link -> bug?"
+    exit 1
+fi
 shift
 
-if [ x"$outcome" = xsuccess ]; then
-    log "[download_finished] $link"
+if [ d"$status" = dsuccess ]; then
+    log "[$self] success: $link"
     echo "$link" >> "$LINKS_DOWNED"
-    while [ $# -gt 0 ]; do
-        if [ -z "$1" ]; then
-            err "[downloaded_file] caught empty string!"
-        else
-            log "[downloaded_file] $1"
+    while [ $# -gt 0 ]; do  # consume other args
+        if [ -n "$1" ]; then
             echo "$1" >> "$FETCH_LOG"
+            log "[$self] downloaded: $1"
+        else
+            err "[$self] got empty additional link -> bug?"
         fi
         shift
     done
-elif [ x"$outcome" = xfail ]; then
+    exit
+elif ! echo x"$status" | grep -v "^x[1-9][0-9]*$" > /dev/null; then
     if grep -q "$link" "$LINKS_FAILED"; then
-        err "[download_failed] $link -> giving up"
         echo "$link" >> "$LINKS_DOWNED"
+        err "[$self] failed again: $link -> giving up"
     else
-        err "[download_failed] $link -> $LINKS_FAILED"
         echo "$link" >> "$LINKS_FAILED"
+        err "[$self] first fail: $link -> $LINKS_FAILED"
     fi
+    exit $status
 else
-    err "[done] first arg was garbage: $@"
+    err "[$self] first arg was garbage: $status"
+    exit 1
 fi
