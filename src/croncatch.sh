@@ -18,48 +18,62 @@
 # 05,23,42 * * * * /almost/20-min-wise
 # */15 * * * * /launch --every-15-minutes
 #
-IFS=
-PATH=/bin
+IFS=" "
+PATH=/bin:/usr/bin
 set -e
+
+: ${CONFIG:=/etc/podcatch-config.sh}
+if [ -r "$CONFIG" ]; then
+    . "$CONFIG"
+    export CONFIG
+fi
 
 #
 # prepare environment / configure podcatch
 #
-# cast list directory
-export LISTDIR=/mnt/brueckencache/podcatch/cfg
+: ${LISTDIR:="/mnt/brueckencache/podcatch/cfg"}
 # the default download destination
-export DLROOT=/mnt/brueckencache/incoming/podcasts
-# archive values
-export INCOMING=/mnt/brueckencache/incoming
-export ARCHIVE=/mnt/brueckencache/archive
+: ${DLROOT:="/mnt/brueckencache/incoming/podcasts"}
+export LISTDIR DLROOT
 #
 # the other scripts
-SRCDIR=/mnt/brueckencache/podcatch/src
-ARCHIVER=$SRCDIR/archive.sh
-PODCATCH=$SRCDIR/podcatch.sh
-export FEEDER=$SRCDIR/grabfeed.sh
-export PARSERSHS=$SRCDIR/catchers
-export SMARTDL=$SRCDIR/smartdl.sh
-export DONESCRIPT=$SRCDIR/done.sh
+: ${SCRIPTDIR:="/mnt/brueckencache/podcatch/src"}
+: ${PODCATCH:="$SCRIPTDIR/podcatch.sh"}
+
+: ${FEEDER:="$SCRIPTDIR/grabfeed.sh"}
+: ${PARSERSHS:="$SCRIPTDIR/catchers"}
+: ${SMARTDL:="$SCRIPTDIR/smartdl.sh"}
+: ${DONESCRIPT:="$SCRIPTDIR/done.sh"}
+export FEEDER PARSERSHS SMARTDL DONESCRIPT
 #
-# the location to where logs are written
-export LOGDIR=/mnt/brueckencache/podcatch
+# the location to where loSCRIPTDIR are written
+: ${LOGDIR:="/mnt/brueckencache/podcatch"}
+export LOGDIR
 #
 # logfile, list of newly downloaded files and error log
-export LOGFILE=$LOGDIR/podcatch.log
-export FETCH_LOG=$LOGDIR/podcatch-fetched.m3u
-export ERROR_LOG=$LOGDIR/podcatch-errors.log
+: ${LOGFILE:="$LOGDIR/podcatch.log"}
+: ${FETCH_LOG:="$LOGDIR/podcatch-fetched.m3u"}
+: ${ERROR_LOG:="$LOGDIR/podcatch-errors.log"}
+export LOGFILE FETCH_LOG ERROR_LOG
 #
 # initial values for behaviour control options (see $FEEDER)
-export initignoring=false
-export fetchfeed=true
-export parsefeed=true
-export downloadepisodes=true
+: ${initignoring:="false"}
+: ${fetchfeed:="true"}
+: ${parsefeed:="true"}
+: ${downloadepisodes:="true"}
+export initignoring fetchfeed parsefeed downloadepisodes
 
-WATCHLIST=/tmp/croncatch.watch
+# archive and local values
+: ${ARCHIVER:="$SCRIPTDIR/archive.sh"}
+: ${INCOMING:="/mnt/brueckencache/incoming"}
+: ${ARCHIVE:="/mnt/brueckencache/archive"}
+export INCOMING ARCHIVE
 
+WATCHLIST="/tmp/croncatch.watch"
+
+self="$(basename "$0")"
 log () {
-    echo "$(date) [cron] $1" >> $LOGFILE
+    echo "$(date) [$self] $1" | tee -a "$LOGFILE"
 }
 
 log "starting up (at pid $$)"
@@ -102,26 +116,26 @@ kill_stale () {
     sleep 1
     # for the case we killed a stalled download,
     # we continue this time (full fetch next time)
-    rm -f $WATCHLIST
+    rm -f "$WATCHLIST"
     PODCATCH="$PODCATCH -np all"
 }
 
 if pids=$(pidof podcatch.sh grabfeed.sh smartdl.sh); then
     log "found running pids: $pids"
-    touch $WATCHLIST
-    if [ x"pids" = x"$(cat $WATCHLIST)" ]; then
+    touch "$WATCHLIST"
+    if [ x"pids" = x"$(cat "$WATCHLIST")" ]; then
         for pid in $pids; do
             kill_stale $pid
         done
     else
-        echo "$pids" > $WATCHLIST
+        echo "$pids" > "$WATCHLIST"
     fi
 fi
 
 if [ -n "$(pidof podcatch.sh grabfeed.sh smartdl.sh)" ]; then
     log "something is still running -> just archiving"
-    $ARCHIVER
+    "$ARCHIVER"
 else
     log "launching: $PODCATCH && $ARCHIVER &"
-    $PODCATCH || true && $ARCHIVER &
+    $PODCATCH || true && "$ARCHIVER" &
 fi
