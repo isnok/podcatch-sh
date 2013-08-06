@@ -219,7 +219,7 @@ harvestedcnt="$(echo "$harvested" | wc -l)"
 if ! [ -r "$dontfetch" ]; then
     if $initignoring; then
         log "[$self] init $dontfetch from $lastparse"
-        cp "$lastparse" "$dontfetch"
+        cat "$lastparse"-* "$dontfetch" | sort | uniq > "$dontfetch"
     else
         log "[$self] init with empty $dontfetch"
         touch "$dontfetch"
